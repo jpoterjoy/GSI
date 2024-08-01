@@ -76,28 +76,32 @@ program enkf_main
  ! reads namelist parameters.
  use params, only : read_namelist,cleanup_namelist,letkf_flag,readin_localization,lupd_satbiasc,&
                     numiter, nanals, lupd_obspace_serial, write_spread_diag,   &
-                    lobsdiag_forenkf, netcdf_diag, efsoi_cycling, ntasks_io
+                    lobsdiag_forenkf, netcdf_diag, efsoi_cycling, ntasks_io, &
+                    pf_flag, min_res, nbackgrounds, nanals
  ! mpi functions and variables.
  use mpisetup, only:  mpi_initialize, mpi_initialize_io, mpi_cleanup, nproc, &
                        mpi_wtime
  ! obs and ob priors, associated metadata.
  use enkf_obsmod, only : readobs, write_obsstats, obfit_prior, obsprd_prior, &
-                    nobs_sat, obfit_post, obsprd_post, obsmod_cleanup
+                    nobs_sat, obfit_post, obsprd_post, obsmod_cleanup, oberrvar
  ! innovation statistics.
  use innovstats, only: print_innovstats
  ! model control vector 
  use controlvec, only: read_control, write_control, controlvec_cleanup, &
-                     init_controlvec
+                     init_controlvec, ncdim
  ! model state vector
  use statevec, only: read_state, statevec_cleanup, init_statevec
  ! EnKF linhx observer
  use observer_enkf, only: init_observer_enkf, destroy_observer_enkf
  ! load balancing
- use loadbal, only: load_balance, loadbal_cleanup, scatter_chunks, gather_chunks
+ use loadbal, only: load_balance, loadbal_cleanup, scatter_chunks, gather_chunks, &
+         ensmean_chunk, anal_chunk, ensmean_chunk_prior, anal_chunk_prior, npts_max
  ! enkf update
  use enkf, only: enkf_update
  ! letkf update
  use letkf, only: letkf_update
+ ! local PF update
+ use pf, only: pf_update
  ! radiance bias correction coefficients.
  use radinfo, only: radinfo_write
  ! posterior ensemble inflation.
@@ -108,12 +112,19 @@ program enkf_main
  use read_diag, only: set_netcdf_read
  ! Observation sensitivity usage
  use enkf_obs_sensitivity, only: init_ob_sens, print_ob_sens, destroy_ob_sens
-
+ use kinds, only: r_single
+ 
  implicit none
  integer(i_kind) nth,ierr
  real(r_double) t1,t2
  logical no_inflate_flag
 
+ ! new arrays needed for local PF
+ real(r_single), allocatable, dimension(:,:,:) :: ensmean_chunk_temp
+ real(r_single), allocatable, dimension(:,:,:,:) :: anal_chunk_temp
+ allocate(anal_chunk_temp(nanals,npts_max,ncdim,nbackgrounds))
+ allocate(ensmean_chunk_temp(npts_max,ncdim,nbackgrounds))
+ 
  ! initialize MPI.
  call mpi_initialize()
  if (nproc==0) call w3tagb('ENKF_ANL',2011,0319,0055,'NP25')
@@ -204,16 +215,48 @@ program enkf_main
 
  t1 = mpi_wtime()
  ! state and bias correction coefficient update iteration.
- if(letkf_flag) then
-    ! do ob space update using serial filter if desired
-    if (lupd_obspace_serial) call enkf_update()
-    call letkf_update()
- else
-    call enkf_update()
- end if
- t2 = mpi_wtime()
- if (nproc == 0) print *,'time in enkf_update =',t2-t1,'on proc',nproc
+ if(pf_flag) then
 
+   t1 = mpi_wtime()
+   call pf_update()
+   t2 = mpi_wtime()
+   if (nproc == 0) print *,'time in pf_update =',t2-t1,'on proc',nproc
+
+   ! called for performing mixed LPF-EnKF update
+   if (min_res > 0.0) then
+
+     ! Inflate obs error variance before EnKF step
+     oberrvar = oberrvar / min_res
+
+     ! Input for posterior inflation is prior following PF step
+     ensmean_chunk_temp = ensmean_chunk_prior
+     anal_chunk_temp  = anal_chunk_prior
+     ensmean_chunk_prior = ensmean_chunk
+     anal_chunk_prior = anal_chunk
+
+     ! Call EnKF
+     t1 = mpi_wtime()
+     call enkf_update()
+     t2 = mpi_wtime()
+     if (nproc == 0) print *,'time in enkf_update =',t2-t1,'on proc',nproc
+
+   end if
+
+ else
+
+   t1 = mpi_wtime()
+   if(letkf_flag) then
+     ! do ob space update using serial filter if desired
+     if (lupd_obspace_serial) call enkf_update()
+     call letkf_update()
+   else
+     call enkf_update()
+   end if
+   t2 = mpi_wtime()
+   if (nproc == 0) print *,'time in enkf_update =',t2-t1,'on proc',nproc
+
+ end if
+ 
  ! Output non-inflated
  ! analyses for FSO
  if(efsoi_cycling) then
@@ -226,11 +269,20 @@ program enkf_main
  end if
  no_inflate_flag=.false.
 
- ! posterior inflation.
- t1 = mpi_wtime()
- call inflate_ens()
- t2 = mpi_wtime()
- if (nproc == 0) print *,'time in inflate_ens =',t2-t1,'on proc',nproc
+ ! posterior inflation (skip for local PF)
+ if( .not. pf_flag .or. min_res > 0.0 ) then
+   t1 = mpi_wtime()
+   call inflate_ens()
+   t2 = mpi_wtime()
+   if (nproc == 0) print *,'time in inflate_ens =',t2-t1,'on proc',nproc
+
+   ! Resort prior fields back to original prior
+   if (pf_flag) then
+     ensmean_chunk_prior = ensmean_chunk_temp
+     anal_chunk_prior= anal_chunk_temp
+   end if
+
+ end if
 
  if (write_spread_diag) then
     t1 = mpi_wtime()

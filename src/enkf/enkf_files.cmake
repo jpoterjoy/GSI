@@ -5,6 +5,7 @@ list(APPEND EnKF_SRC_srcs
   controlvec.f90
   covlocal.f90
   enkf.f90
+  pf.f90
   enkf_obs_sensitivity.f90
   enkf_obsmod.f90
   expand_ens.f90

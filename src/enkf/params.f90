@@ -258,6 +258,14 @@ logical, public :: taperanalperts = .false.
 real(r_kind), public :: taperanalperts_akbot = 500.0_r_kind
 real(r_kind), public :: taperanalperts_aktop = -1.0_r_kind
 
+! namelist variables added for local PF
+logical,public         :: pf_flag = .false.
+real(r_single),public  :: frac_neff  = 0.4
+real(r_single),public  :: pf_alpha   = 0.3
+real(r_single),public  :: pf_bwnorm  = 1.0
+real(r_single),public  :: min_res  = 0.0
+integer(i_kind),public :: pf_kddm = 1
+
 namelist /nam_enkf/datestring,datapath,iassim_order,nvars,&
                    covinflatemax,covinflatemin,deterministic,sortinc,&
                    mincorrlength_fact,corrlengthnh,corrlengthtr,corrlengthsh,&
@@ -296,6 +304,9 @@ namelist /nam_fv3/fv3fixpath,nx_res,ny_res,ntiles,l_pres_add_saved,l_fv3reg_file
                   fv3_io_layout_nx,fv3_io_layout_ny
 namelist /satobs_enkf/sattypes_rad,dsis
 namelist /ozobs_enkf/sattypes_oz
+
+! local_pf namelist
+namelist /local_pf/pf_flag,frac_neff,pf_alpha,pf_kddm,pf_bwnorm,min_res
 
 contains
 
@@ -484,6 +495,7 @@ open(912,file='enkf.nml',form="formatted")
 read(912,nam_enkf)
 read(912,satobs_enkf)
 read(912,ozobs_enkf)
+read(912,local_pf)
 if (regional) then
   read(912,nam_wrf)
 endif
