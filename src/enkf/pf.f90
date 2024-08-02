@@ -287,9 +287,9 @@ temperingloop: do outniter=1,maxoutiter
            d = ( ob(nob) - ( anal_obchunk_prior(:,nob1) + ensmean_obchunk_prior(nob1)) )
            d = d**2 / (two * oberrvaruse(nob))
            d = d - minval(d)
-
+           
            ! Cap min likelihood at 1E-40 to prevent errors with regularization step
-           hw = exp( - d/(em) ) + 1E-40
+           hw = exp( - d ) + 1E-40
            hw = hw / sum(hw)
 
 !if (nobx < 1000) then
