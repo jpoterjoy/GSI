@@ -265,6 +265,7 @@ real(r_single),public  :: pf_alpha   = 0.3
 real(r_single),public  :: pf_bwnorm  = 1.0
 real(r_single),public  :: min_res  = 0.0
 integer(i_kind),public :: pf_kddm = 1
+integer(i_kind),public :: max_iter = 3
 
 namelist /nam_enkf/datestring,datapath,iassim_order,nvars,&
                    covinflatemax,covinflatemin,deterministic,sortinc,&
@@ -306,7 +307,7 @@ namelist /satobs_enkf/sattypes_rad,dsis
 namelist /ozobs_enkf/sattypes_oz
 
 ! local_pf namelist
-namelist /local_pf/pf_flag,frac_neff,pf_alpha,pf_kddm,pf_bwnorm,min_res
+namelist /local_pf/pf_flag,frac_neff,pf_alpha,pf_kddm,pf_bwnorm,min_res,max_iter
 
 contains
 

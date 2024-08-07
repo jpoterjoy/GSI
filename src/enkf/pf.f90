@@ -81,7 +81,7 @@ use params, only: sprd_tol, datapath, nanals,&
                   sortinc,numiter,nlevs,nvars,&
                   zhuberleft,zhuberright,varqc,lupd_satbiasc,huber,univaroz,&
                   nbackgrounds,nhr_anal,fhr_assim,&
-                  iseed_perturbed_obs, frac_neff, pf_alpha, pf_kddm, pf_bwnorm, min_res
+                  iseed_perturbed_obs, frac_neff, pf_alpha, pf_kddm, pf_bwnorm, min_res, max_iter
 use radinfo, only: npred,nusis,nuchan,jpch_rad,predx
 use radbias, only: apply_biascorr, update_biascorr
 use gridinfo, only: nlevs_pres
@@ -205,8 +205,7 @@ iskip = 0
 
 ! The outer iterations are for "iterative resampling." This approach
 ! break observations into parts, like iterative ensemble kalman smoothers.
-maxoutiter=3
-!maxoutiter=1
+maxoutiter=max_iter
 
 ! Tempering loop
 temperingloop: do outniter=1,maxoutiter
@@ -491,6 +490,9 @@ temperingloop: do outniter=1,maxoutiter
             indx = 0
 
           else
+
+!write(*,*)'w: ',w
+!write(*,*) 'prior_ens: ',prior_ens
 
             call pf_sample(prior_ens, w, nanals, indx)
 
